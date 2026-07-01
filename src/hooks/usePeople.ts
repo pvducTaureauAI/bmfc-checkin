@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../utils/supabase";
 import { toast } from "react-toastify";
-import { EState } from "../common.ts";
+import { EState } from "../common/index.ts";
 
 interface Person {
     id: string;
