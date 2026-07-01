@@ -1,4 +1,24 @@
+import { toast } from "react-toastify";
+import { supabase } from "../utils/supabase";
+
 const Login = () => {
+    const loginHandler = async (username: string, password: string) => {
+        try {
+            const res = await supabase.auth.signInWithPassword({
+                email: username,
+                password: password,
+            });
+            
+            if (res.error) {
+                toast.error("Đăng nhập thất bại!");
+            } else {
+                toast.success("Đăng nhập thành công!");
+                window.location.href = "/";
+            }
+        } catch (error) {
+            console.error("Error logging in:", error);
+        }
+    };
 
     const submitHandler = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -6,8 +26,8 @@ const Login = () => {
         const { username, password } = event.currentTarget.elements as any;
         const usernameValue = username.value;
         const passwordValue = password.value;
-        console.log('Username:', usernameValue);
-        console.log('Password:', passwordValue);
+
+        loginHandler(usernameValue, passwordValue);
     }
 
     return (
