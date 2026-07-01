@@ -10,8 +10,9 @@ import {
 } from '../common/types'
 import useAuth from '../hooks/useAuth'
 import Modal from '../components/Modal'
-import MonthlyFundList from '../components/finance/MonthlyFundList'
-import PenaltyList from '../components/finance/PenaltyList'
+import DailyTab from '../components/tabs/DailyTab'
+import FinanceTab from '../components/tabs/FinanceTab'
+import SettingsTab from '../components/tabs/SettingsTab'
 
 interface MonthlyFundRow {
   user_id: string
@@ -661,10 +662,6 @@ export default function FootballManager() {
         ? fundRangeLabel
         : penaltyRangeLabel
 
-  const activeDaySummary = attendanceSummaries.find(
-    (item) => item.date === selectedDate,
-  )
-
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 pb-24 font-sans selection:bg-emerald-500 selection:text-white">
       <header className="sticky top-0 z-50 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -740,303 +737,54 @@ export default function FootballManager() {
       ) : (
         <main className="max-w-md mx-auto p-4 sm:max-w-xl md:max-w-2xl space-y-4">
           {activeTab === 'daily' && (
-            <>
-              {timeFilter === 'day' ? (
-                <>
-                  {activeDaySummary && (
-                    <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700/60 shadow-xl text-xs text-slate-300 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                      <div>Đá: {activeDaySummary.present}</div>
-                      <div>Đi muộn: {activeDaySummary.late}</div>
-                      <div>Quên ĐD: {activeDaySummary.forgot}</div>
-                      <div>Bùng: {activeDaySummary.noShow}</div>
-                    </div>
-                  )}
-
-                  <div className="bg-slate-800 rounded-2xl border border-slate-700/60 shadow-xl overflow-hidden">
-                    <div className="p-4 border-b border-slate-700 flex justify-between items-center">
-                      <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                        Danh Sách Ra Sân
-                      </h3>
-                      <input
-                        type="text"
-                        placeholder="Tìm kiếm theo tên..."
-                        value={searchByPlayerName}
-                        onChange={(e) => setSearchByPlayerName(e.target.value)}
-                        className="bg-slate-700 text-slate-200 placeholder:text-slate-400 border border-slate-600 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      />
-                    </div>
-
-                    <div className="divide-y divide-slate-700/40">
-                      {players
-                        .filter((player) =>
-                          player.name
-                            .toLowerCase()
-                            .includes(searchByPlayerName.toLowerCase()),
-                        )
-                        .sort((a, b) => a.name.localeCompare(b.name))
-                        .map((player) => (
-                          <div
-                            key={player.id}
-                            className="p-3 flex flex-col gap-2.5 bg-slate-800/30 hover:bg-slate-800/80 transition-colors"
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 rounded-full bg-slate-700 border border-slate-600 flex items-center justify-center text-xs font-bold text-slate-200">
-                                {player.name.charAt(0)}
-                              </div>
-                              <span className="text-sm font-semibold">
-                                {player.name}
-                              </span>
-                            </div>
-
-                            <div className="grid grid-cols-5 gap-1">
-                              {[
-                                {
-                                  key: AttendanceStatus.PRESENT,
-                                  label: 'Đá',
-                                  cls: 'bg-emerald-600/20 text-emerald-400 border-emerald-500/40',
-                                },
-                                {
-                                  key: AttendanceStatus.ABSENT,
-                                  label: 'Nghỉ',
-                                  cls: 'bg-slate-700 text-slate-300 border-slate-500',
-                                },
-                                {
-                                  key: AttendanceStatus.LATE,
-                                  label: 'Đi muộn',
-                                  cls: 'bg-cyan-600/20 text-cyan-300 border-cyan-500/40',
-                                },
-                                {
-                                  key: AttendanceStatus.FORGOT,
-                                  label: 'Quên ĐD',
-                                  cls: 'bg-amber-600/20 text-amber-400 border-amber-500/40',
-                                },
-                                {
-                                  key: AttendanceStatus.NO_SHOW,
-                                  label: 'Bùng 😡',
-                                  cls: 'bg-rose-600/20 text-rose-400 border-rose-500/40',
-                                },
-                              ].map((btn) => (
-                                <button
-                                  key={btn.key}
-                                  disabled={submitting || !canEdit}
-                                  onClick={() =>
-                                    void handleTickAttendance(
-                                      player.id,
-                                      btn.key,
-                                    )
-                                  }
-                                  className={`py-1.5 text-[11px] font-medium rounded-lg text-center border transition-all ${
-                                    player.status === btn.key
-                                      ? `${btn.cls} font-bold ring-1 ring-offset-1 ring-offset-slate-800 ring-current`
-                                      : 'bg-slate-900/40 border-slate-700 text-slate-400'
-                                  } ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
-                                >
-                                  {btn.label}
-                                </button>
-                              ))}
-                            </div>
-
-                            <div className="grid grid-cols-4 gap-1 pt-1">
-                              {[
-                                {
-                                  value: MatchResult.UNKNOWN,
-                                  label: 'Không xác định',
-                                },
-                                { value: MatchResult.WIN, label: 'Thắng' },
-                                { value: MatchResult.DRAW, label: 'Hòa' },
-                                { value: MatchResult.LOSS, label: 'Thua' },
-                              ].map((item) => (
-                                <button
-                                  key={String(item.label)}
-                                  disabled={submitting || !canEdit}
-                                  onClick={() =>
-                                    void handleChangePlayerResult(
-                                      player.id,
-                                      item.value,
-                                    )
-                                  }
-                                  className={`py-1.5 text-[11px] font-medium rounded-lg text-center border transition-all ${
-                                    player.match_result === item.value
-                                      ? 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold ring-1 ring-offset-1 ring-offset-slate-800 ring-amber-400'
-                                      : 'bg-slate-900/40 border-slate-700 text-slate-400'
-                                  } ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
-                                >
-                                  {item.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="space-y-3">
-                  <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700/60 shadow-xl">
-                    <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                      Tổng hợp theo kỳ
-                    </h3>
-                    <p className="text-xs text-slate-400">
-                      Chạm vào từng ngày để mở về chế độ chỉnh sửa theo ngày.
-                    </p>
-                  </div>
-
-                  {attendanceSummaries.map((summary) => (
-                    <button
-                      key={summary.date}
-                      onClick={() => handleSetSelectedDate(summary.date)}
-                      className="w-full text-left bg-slate-800 p-4 rounded-2xl border border-slate-700/60 shadow-xl hover:bg-slate-800/90 transition-colors"
-                    >
-                      <div className="flex items-center justify-between gap-3 mb-2">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-100">
-                            {summary.date}
-                          </p>
-                          <p className="text-[11px] text-slate-400">
-                            {summary.total} người - kết quả{' '}
-                            {summary.result || 'chưa chốt'}
-                          </p>
-                        </div>
-                        <span className="text-[11px] text-emerald-300 bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20">
-                          Xem ngày này
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs text-slate-300 sm:grid-cols-4">
-                        <span>Đá: {summary.present}</span>
-                        <span>Muộn: {summary.late}</span>
-                        <span>Quên: {summary.forgot}</span>
-                        <span>Bùng: {summary.noShow}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
+            <DailyTab
+              timeFilter={timeFilter}
+              canEdit={canEdit}
+              submitting={submitting}
+              players={players}
+              searchByPlayerName={searchByPlayerName}
+              onChangeSearch={setSearchByPlayerName}
+              attendanceSummaries={attendanceSummaries}
+              selectedDate={selectedDate}
+              onSetSelectedDate={handleSetSelectedDate}
+              onTickAttendance={(playerId, status) => {
+                void handleTickAttendance(playerId, status)
+              }}
+              onChangePlayerResult={(playerId, result) => {
+                void handleChangePlayerResult(playerId, result)
+              }}
+            />
           )}
 
           {activeTab === 'finance' && (
-            <div className="space-y-4">
-              <div className="bg-slate-800/70 border border-slate-700/60 rounded-2xl p-2 shadow-xl grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setFinanceView('fund')}
-                  className={`rounded-xl py-2 text-xs font-semibold border transition-colors ${
-                    financeView === 'fund'
-                      ? 'bg-emerald-500 text-white border-emerald-400'
-                      : 'bg-slate-900 text-slate-300 border-slate-700'
-                  }`}
-                >
-                  Quỹ
-                </button>
-                <button
-                  onClick={() => setFinanceView('penalty')}
-                  className={`rounded-xl py-2 text-xs font-semibold border transition-colors ${
-                    financeView === 'penalty'
-                      ? 'bg-emerald-500 text-white border-emerald-400'
-                      : 'bg-slate-900 text-slate-300 border-slate-700'
-                  }`}
-                >
-                  Phạt
-                </button>
-              </div>
-
-              {!canEdit && (
-                <div className="rounded-xl border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-slate-300">
-                  Chế độ xem công khai chỉ cho phép đọc dữ liệu. Các thao tác
-                  cập nhật trạng thái đóng tiền cần đăng nhập admin.
-                </div>
-              )}
-
-              {financeView === 'fund' ? (
-                <MonthlyFundList
-                  rows={monthlyFundRows}
-                  canEdit={canEdit}
-                  submitting={submitting}
-                  monthLabel={fundMonth}
-                  onTogglePaid={(userId, _nextPaid) => {
-                    void handleClearDebt(userId)
-                  }}
-                />
-              ) : (
-                <PenaltyList
-                  rows={penaltyRows}
-                  canEdit={canEdit}
-                  submitting={submitting}
-                  periodLabel={penaltyRangeLabel}
-                  onTogglePaid={(recordId, nextPaid) => {
-                    void handleTogglePenaltyPaid(recordId, nextPaid)
-                  }}
-                />
-              )}
-            </div>
+            <FinanceTab
+              canEdit={canEdit}
+              submitting={submitting}
+              financeView={financeView}
+              setFinanceView={setFinanceView}
+              monthlyFundRows={monthlyFundRows}
+              penaltyRows={penaltyRows}
+              fundMonth={fundMonth}
+              penaltyRangeLabel={penaltyRangeLabel}
+              onToggleFundPaid={(userId) => {
+                void handleClearDebt(userId)
+              }}
+              onTogglePenaltyPaid={(recordId, nextPaid) => {
+                void handleTogglePenaltyPaid(recordId, nextPaid)
+              }}
+            />
           )}
 
           {activeTab === 'settings' && (
-            <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700/60 shadow-xl space-y-4">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  Thiết Lập Định Mức Phạt
-                </h3>
-                {!canEdit && (
-                  <span className="text-[11px] text-slate-500">
-                    Chỉ admin được sửa
-                  </span>
-                )}
-              </div>
-
-              <div className="space-y-3.5">
-                {[
-                  { key: 'monthly_fee', label: 'Tiền quỹ đóng hàng tháng' },
-                  { key: 'penalty_forgot', label: 'Tiền phạt quên điểm danh' },
-                  { key: 'penalty_late', label: 'Tiền phạt đi muộn' },
-                  {
-                    key: 'penalty_no_show',
-                    label: 'Tiền phạt điểm danh rồi bùng (No-show)',
-                  },
-                  {
-                    key: 'penalty_missed_week',
-                    label: 'Tiền phạt thiếu buổi tuần (dưới 2 buổi)',
-                  },
-                  {
-                    key: 'penalty_loss',
-                    label: 'Tiền phạt thua / hòa buổi',
-                  },
-                ].map((item) => (
-                  <div
-                    key={item.key}
-                    className="flex items-center justify-between gap-4 bg-slate-900/40 p-3 rounded-xl border border-slate-700/40"
-                  >
-                    <label className="text-xs font-medium text-slate-300">
-                      {item.label}
-                    </label>
-                    <div className="relative rounded-lg shadow-sm w-28">
-                      <input
-                        type="number"
-                        disabled={submitting || !canEdit}
-                        value={penaltySettings[item.key] || 0}
-                        onChange={(e) =>
-                          setPenaltySettings({
-                            ...penaltySettings,
-                            [item.key]: Number(e.target.value),
-                          })
-                        }
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-2 pr-6 py-1 text-xs text-right font-bold text-emerald-400 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
-                      />
-                      <div className="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-[10px] text-slate-500">
-                        đ
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <button
-                onClick={() => void handleUpdateSettings()}
-                disabled={submitting || !canEdit}
-                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold py-2.5 rounded-xl transition-all shadow-md shadow-emerald-500/10 disabled:opacity-50"
-              >
-                {submitting ? 'Đang cập nhật...' : '✔️ Lưu Cấu Hình Phạt Mới'}
-              </button>
-            </div>
+            <SettingsTab
+              canEdit={canEdit}
+              submitting={submitting}
+              penaltySettings={penaltySettings}
+              setPenaltySettings={setPenaltySettings}
+              onUpdateSettings={() => {
+                void handleUpdateSettings()
+              }}
+            />
           )}
         </main>
       )}
