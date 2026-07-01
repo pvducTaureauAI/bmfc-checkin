@@ -792,18 +792,18 @@ export default function FootballManager() {
                               {[
                                 {
                                   key: AttendanceStatus.PRESENT,
-                                  label: 'Đá chính',
+                                  label: 'Đá',
                                   cls: 'bg-emerald-600/20 text-emerald-400 border-emerald-500/40',
-                                },
-                                {
-                                  key: AttendanceStatus.LATE,
-                                  label: 'Đi muộn',
-                                  cls: 'bg-cyan-600/20 text-cyan-300 border-cyan-500/40',
                                 },
                                 {
                                   key: AttendanceStatus.ABSENT,
                                   label: 'Nghỉ',
                                   cls: 'bg-slate-700 text-slate-300 border-slate-500',
+                                },
+                                {
+                                  key: AttendanceStatus.LATE,
+                                  label: 'Đi muộn',
+                                  cls: 'bg-cyan-600/20 text-cyan-300 border-cyan-500/40',
                                 },
                                 {
                                   key: AttendanceStatus.FORGOT,
