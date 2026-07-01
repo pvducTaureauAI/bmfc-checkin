@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import useAuth from "../hooks/useAuth";
 import usePeople from "../hooks/usePeople";
 import Modal from "../components/Modal";
@@ -85,41 +85,6 @@ const ModalAdd = ({open, onClose, onAdd}: {open: boolean, onClose: () => void, o
                 className="w-full bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 transition duration-200" 
             >
                 Thêm người dùng
-            </button>
-        </Modal>
-    )
-}
-
-const ModalUpdate = ({open, onClose, onUpdate, currentName}: {open: boolean, onClose: () => void, onUpdate: (name: string) => void, currentName: string}) => {
-    const [name, setName] = useState(currentName);
-    
-    const handleUpdate = async () => {
-        await onUpdate(name);
-        setName("");
-        onClose();
-    }
-
-    useEffect(() => {
-        setName(currentName);
-    }, [currentName]);
-
-    return (
-        <Modal
-            open={open}
-            onClose={onClose}
-        >
-            <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Nhập tên người dùng"
-                className="w-full px-3 py-2 border rounded focus:outline-none focus:ring focus:border-blue-300 mb-4"
-            />
-            <button
-                onClick={handleUpdate}
-                className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 transition duration-200"
-            >
-                Cập nhật người dùng
             </button>
         </Modal>
     )
