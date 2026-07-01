@@ -502,22 +502,26 @@ export default function FootballManager() {
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-4 pt-4 space-y-4">
-        <div className="bg-slate-800/70 border border-slate-700/60 rounded-2xl p-3 shadow-xl flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-wider text-slate-400">
-              Bộ lọc thời gian
-            </p>
-            <p className="text-sm font-semibold text-slate-100">{rangeLabel}</p>
+      {activeTab !== 'settings' && (
+        <div className="max-w-4xl mx-auto px-4 pt-4 space-y-4">
+          <div className="bg-slate-800/70 border border-slate-700/60 rounded-2xl p-3 shadow-xl flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-slate-400">
+                Bộ lọc thời gian
+              </p>
+              <p className="text-sm font-semibold text-slate-100">
+                {rangeLabel}
+              </p>
+            </div>
+            <button
+              onClick={openFilterModal}
+              className="shrink-0 bg-slate-900 hover:bg-slate-700 border border-slate-600 text-slate-100 text-xs font-semibold px-3 py-2 rounded-xl transition-colors"
+            >
+              Bộ lọc
+            </button>
           </div>
-          <button
-            onClick={openFilterModal}
-            className="shrink-0 bg-slate-900 hover:bg-slate-700 border border-slate-600 text-slate-100 text-xs font-semibold px-3 py-2 rounded-xl transition-colors"
-          >
-            Bộ lọc
-          </button>
         </div>
-      </div>
+      )}
 
       {loading ? (
         <div className="flex flex-col items-center justify-center pt-32 space-y-3">
