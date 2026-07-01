@@ -10,12 +10,24 @@ import {
 } from '../common/types'
 import useAuth from '../hooks/useAuth'
 import Modal from '../components/Modal'
+import MonthlyFundList from '../components/finance/MonthlyFundList'
+import PenaltyList from '../components/finance/PenaltyList'
 
-interface FinanceRow {
-  id: string
+interface MonthlyFundRow {
+  user_id: string
   name: string
   is_paid: boolean
-  total_debt: number
+  amount: number
+}
+
+interface PenaltyRow {
+  id: string
+  user_id: string
+  name: string
+  date: string
+  reason: string
+  amount: number
+  is_paid: boolean
 }
 
 interface AttendanceRecordView {
@@ -38,6 +50,7 @@ interface DateSummary {
 }
 
 type TimeFilter = 'day' | 'week' | 'month'
+type FinanceView = 'fund' | 'penalty'
 
 const formatDateInput = (date: Date) => {
   const year = date.getFullYear()
@@ -89,6 +102,17 @@ const weekInputToAnchorDate = (weekValue: string, fallbackDate: string) => {
 }
 
 const parseLocalDate = (value: string) => new Date(`${value}T00:00:00`)
+
+const getAnchorDate = (
+  preset: TimeFilter,
+  day: string,
+  week: string,
+  month: string,
+) => {
+  if (preset === 'day') return day
+  if (preset === 'week') return weekInputToAnchorDate(week, day)
+  return `${month}-01`
+}
 
 const getRangeBounds = (preset: TimeFilter, anchorDate: string) => {
   const base = parseLocalDate(anchorDate)
@@ -177,16 +201,30 @@ export default function FootballManager() {
   const [selectedDay, setSelectedDay] = useState<string>(defaultDay)
   const [selectedWeek, setSelectedWeek] = useState<string>(defaultWeek)
   const [selectedMonth, setSelectedMonth] = useState<string>(defaultMonth)
+  const [financeView, setFinanceView] = useState<FinanceView>('fund')
+  const [fundMonth, setFundMonth] = useState<string>(defaultMonth)
+  const [penaltyFilter, setPenaltyFilter] = useState<TimeFilter>('day')
+  const [penaltyDay, setPenaltyDay] = useState<string>(defaultDay)
+  const [penaltyWeek, setPenaltyWeek] = useState<string>(defaultWeek)
+  const [penaltyMonth, setPenaltyMonth] = useState<string>(defaultMonth)
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false)
   const [draftFilter, setDraftFilter] = useState<TimeFilter>('day')
   const [draftDay, setDraftDay] = useState<string>(defaultDay)
   const [draftWeek, setDraftWeek] = useState<string>(defaultWeek)
   const [draftMonth, setDraftMonth] = useState<string>(defaultMonth)
+  const [draftFundMonth, setDraftFundMonth] = useState<string>(defaultMonth)
+  const [draftPenaltyFilter, setDraftPenaltyFilter] =
+    useState<TimeFilter>('day')
+  const [draftPenaltyDay, setDraftPenaltyDay] = useState<string>(defaultDay)
+  const [draftPenaltyWeek, setDraftPenaltyWeek] = useState<string>(defaultWeek)
+  const [draftPenaltyMonth, setDraftPenaltyMonth] =
+    useState<string>(defaultMonth)
   const [attendanceSummaries, setAttendanceSummaries] = useState<DateSummary[]>(
     [],
   )
   const [players, setPlayers] = useState<PlayerAttendance[]>([])
-  const [financeRecords, setFinanceRecords] = useState<FinanceRow[]>([])
+  const [monthlyFundRows, setMonthlyFundRows] = useState<MonthlyFundRow[]>([])
+  const [penaltyRows, setPenaltyRows] = useState<PenaltyRow[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [submitting, setSubmitting] = useState<boolean>(false)
   const [penaltySettings, setPenaltySettings] = useState<PenaltySettings>({
@@ -201,7 +239,17 @@ export default function FootballManager() {
 
   useEffect(() => {
     void fetchInitialData()
-  }, [activeTab, timeFilter, selectedDate])
+  }, [
+    activeTab,
+    timeFilter,
+    selectedDate,
+    financeView,
+    fundMonth,
+    penaltyFilter,
+    penaltyDay,
+    penaltyWeek,
+    penaltyMonth,
+  ])
 
   const fetchInitialData = async () => {
     try {
@@ -258,43 +306,93 @@ export default function FootballManager() {
       }
 
       if (activeTab === 'finance') {
-        const { data: usersData, error: userErr } = await supabase
-          .from('bmfc_user')
-          .select('id, name')
-        const { data: finData, error: finErr } = await supabase
-          .from('bmfc_finances')
-          .select('*')
-          .gte('date', startDate)
-          .lte('date', endDate)
-
-        if (userErr || finErr) throw userErr || finErr
-
-        const summary: FinanceRow[] = (usersData || []).map((userRow: any) => {
-          const userDebts =
-            finData?.filter(
-              (record: any) => record.user_id === userRow.id && !record.is_paid,
-            ) || []
-          const totalDebt = userDebts.reduce(
-            (sum: number, item: any) => sum + Number(item.amount),
-            0,
+        if (financeView === 'fund') {
+          const monthAnchor = `${fundMonth}-01`
+          const { startDate: monthStart, endDate: monthEnd } = getRangeBounds(
+            'month',
+            monthAnchor,
           )
-          const hasPaidMonthly =
-            finData?.some(
-              (record: any) =>
-                record.user_id === userRow.id &&
-                record.type === 'monthly' &&
-                record.is_paid,
-            ) || false
 
-          return {
-            id: userRow.id,
-            name: userRow.name,
-            is_paid: hasPaidMonthly,
-            total_debt: totalDebt,
-          }
-        })
+          const [
+            { data: usersData, error: userErr },
+            { data: fundData, error: fundErr },
+          ] = await Promise.all([
+            supabase.from('bmfc_user').select('id, name'),
+            supabase
+              .from('bmfc_finances')
+              .select('id, user_id, amount, is_paid, type, date')
+              .eq('type', 'monthly')
+              .gte('date', monthStart)
+              .lte('date', monthEnd),
+          ])
 
-        setFinanceRecords(summary)
+          if (userErr || fundErr) throw userErr || fundErr
+
+          const rows: MonthlyFundRow[] = (usersData || [])
+            .map((userRow: any) => {
+              const monthlyRecord = (fundData || []).find(
+                (record: any) => record.user_id === userRow.id,
+              )
+
+              return {
+                user_id: userRow.id,
+                name: userRow.name,
+                is_paid: Boolean(monthlyRecord?.is_paid),
+                amount: Number(
+                  monthlyRecord?.amount ||
+                    penaltySettings.monthly_fee ||
+                    100000,
+                ),
+              }
+            })
+            .sort((a, b) => a.name.localeCompare(b.name))
+
+          setMonthlyFundRows(rows)
+          setPenaltyRows([])
+        } else {
+          const penaltyAnchor = getAnchorDate(
+            penaltyFilter,
+            penaltyDay,
+            penaltyWeek,
+            penaltyMonth,
+          )
+          const { startDate: penaltyStart, endDate: penaltyEnd } =
+            getRangeBounds(penaltyFilter, penaltyAnchor)
+
+          const [
+            { data: usersData, error: userErr },
+            { data: dataRows, error: finErr },
+          ] = await Promise.all([
+            supabase.from('bmfc_user').select('id, name'),
+            supabase
+              .from('bmfc_finances')
+              .select('id, user_id, date, reason, amount, is_paid, type')
+              .eq('type', 'penalty')
+              .gte('date', penaltyStart)
+              .lte('date', penaltyEnd),
+          ])
+
+          if (userErr || finErr) throw userErr || finErr
+
+          const nameMap = new Map<string, string>(
+            (usersData || []).map((userRow: any) => [userRow.id, userRow.name]),
+          )
+
+          const rows: PenaltyRow[] = (dataRows || [])
+            .map((item: any) => ({
+              id: item.id,
+              user_id: item.user_id,
+              name: nameMap.get(item.user_id) || 'Không rõ',
+              date: item.date,
+              reason: item.reason || 'Phạt nội bộ',
+              amount: Number(item.amount || 0),
+              is_paid: Boolean(item.is_paid),
+            }))
+            .sort((a, b) => b.date.localeCompare(a.date))
+
+          setPenaltyRows(rows)
+          setMonthlyFundRows([])
+        }
         return
       }
 
@@ -313,14 +411,43 @@ export default function FootballManager() {
   }
 
   const openFilterModal = () => {
-    setDraftFilter(timeFilter)
-    setDraftDay(selectedDay)
-    setDraftWeek(selectedWeek)
-    setDraftMonth(selectedMonth)
+    if (activeTab === 'daily') {
+      setDraftFilter(timeFilter)
+      setDraftDay(selectedDay)
+      setDraftWeek(selectedWeek)
+      setDraftMonth(selectedMonth)
+    } else if (activeTab === 'finance') {
+      if (financeView === 'fund') {
+        setDraftFundMonth(fundMonth)
+      } else {
+        setDraftPenaltyFilter(penaltyFilter)
+        setDraftPenaltyDay(penaltyDay)
+        setDraftPenaltyWeek(penaltyWeek)
+        setDraftPenaltyMonth(penaltyMonth)
+      }
+    }
     setIsFilterModalOpen(true)
   }
 
   const applyFilterFromModal = () => {
+    if (activeTab === 'finance') {
+      if (financeView === 'fund') {
+        setFundMonth(draftFundMonth)
+      } else {
+        setPenaltyFilter(draftPenaltyFilter)
+        if (draftPenaltyFilter === 'day') {
+          setPenaltyDay(draftPenaltyDay)
+        } else if (draftPenaltyFilter === 'week') {
+          setPenaltyWeek(draftPenaltyWeek)
+        } else {
+          setPenaltyMonth(draftPenaltyMonth)
+        }
+      }
+
+      setIsFilterModalOpen(false)
+      return
+    }
+
     let nextAnchorDate = selectedDate
 
     if (draftFilter === 'day') {
@@ -420,27 +547,76 @@ export default function FootballManager() {
 
   const handleClearDebt = async (userId: string) => {
     if (!canEdit) {
-      alert('Chỉ admin mới có quyền thu tiền.')
+      alert('Chỉ admin mới có quyền cập nhật trạng thái đóng tiền.')
       return
     }
 
-    if (
-      !window.confirm('Xác nhận thành viên này đã đóng toàn bộ tiền nợ phạt?')
-    )
-      return
-
     try {
-      const { error } = await supabase
-        .from('bmfc_finances')
-        .update({ is_paid: true })
-        .eq('user_id', userId)
-        .eq('type', 'penalty')
+      setSubmitting(true)
+      const monthAnchor = `${fundMonth}-01`
+      const { startDate: monthStart, endDate: monthEnd } = getRangeBounds(
+        'month',
+        monthAnchor,
+      )
 
-      if (error) throw error
-      alert('Đã ghi nhận đóng phạt!')
+      const { data: existingRows, error: existingErr } = await supabase
+        .from('bmfc_finances')
+        .select('id, is_paid')
+        .eq('type', 'monthly')
+        .eq('user_id', userId)
+        .gte('date', monthStart)
+        .lte('date', monthEnd)
+
+      if (existingErr) throw existingErr
+
+      const existing = (existingRows || [])[0]
+      const nextPaid = !Boolean(existing?.is_paid)
+
+      if (existing?.id) {
+        const { error } = await supabase
+          .from('bmfc_finances')
+          .update({ is_paid: nextPaid })
+          .eq('id', existing.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('bmfc_finances').insert({
+          user_id: userId,
+          type: 'monthly',
+          reason: `Quỹ tháng ${fundMonth}`,
+          amount: penaltySettings.monthly_fee || 100000,
+          date: monthStart,
+          is_paid: true,
+        })
+        if (error) throw error
+      }
+
       await fetchInitialData()
     } catch (error: any) {
-      alert('Lỗi xử lý đóng tiền: ' + error.message)
+      alert('Lỗi cập nhật trạng thái quỹ: ' + error.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleTogglePenaltyPaid = async (
+    recordId: string,
+    nextPaid: boolean,
+  ) => {
+    if (!canEdit) return
+
+    try {
+      setSubmitting(true)
+      const { error } = await supabase
+        .from('bmfc_finances')
+        .update({ is_paid: nextPaid })
+        .eq('id', recordId)
+
+      if (error) throw error
+      await fetchInitialData()
+    } catch (error: any) {
+      alert('Lỗi cập nhật trạng thái phạt: ' + error.message)
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -449,10 +625,33 @@ export default function FootballManager() {
   }
 
   const { startDate, endDate } = getRangeBounds(timeFilter, selectedDate)
-  const rangeLabel =
+  const dailyRangeLabel =
     timeFilter === 'day'
       ? `Ngày ${selectedDate}`
       : `${getPeriodLabel(timeFilter)}: ${startDate} - ${endDate}`
+
+  const fundRangeLabel = `Tháng ${fundMonth}`
+  const penaltyAnchor = getAnchorDate(
+    penaltyFilter,
+    penaltyDay,
+    penaltyWeek,
+    penaltyMonth,
+  )
+  const { startDate: penaltyStart, endDate: penaltyEnd } = getRangeBounds(
+    penaltyFilter,
+    penaltyAnchor,
+  )
+  const penaltyRangeLabel =
+    penaltyFilter === 'day'
+      ? `Ngày ${penaltyDay}`
+      : `${getPeriodLabel(penaltyFilter)}: ${penaltyStart} - ${penaltyEnd}`
+
+  const rangeLabel =
+    activeTab === 'daily'
+      ? dailyRangeLabel
+      : financeView === 'fund'
+        ? fundRangeLabel
+        : penaltyRangeLabel
 
   const activeDaySummary = attendanceSummaries.find(
     (item) => item.date === selectedDate,
@@ -708,62 +907,58 @@ export default function FootballManager() {
           )}
 
           {activeTab === 'finance' && (
-            <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700/60 shadow-xl space-y-4">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  Theo Dõi Đóng Quỹ & Phạt
-                </h3>
-                <span className="text-[11px] text-slate-500">
-                  {getPeriodLabel(timeFilter)}
-                </span>
+            <div className="space-y-4">
+              <div className="bg-slate-800/70 border border-slate-700/60 rounded-2xl p-2 shadow-xl grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setFinanceView('fund')}
+                  className={`rounded-xl py-2 text-xs font-semibold border transition-colors ${
+                    financeView === 'fund'
+                      ? 'bg-emerald-500 text-white border-emerald-400'
+                      : 'bg-slate-900 text-slate-300 border-slate-700'
+                  }`}
+                >
+                  Quỹ
+                </button>
+                <button
+                  onClick={() => setFinanceView('penalty')}
+                  className={`rounded-xl py-2 text-xs font-semibold border transition-colors ${
+                    financeView === 'penalty'
+                      ? 'bg-emerald-500 text-white border-emerald-400'
+                      : 'bg-slate-900 text-slate-300 border-slate-700'
+                  }`}
+                >
+                  Phạt
+                </button>
               </div>
 
               {!canEdit && (
                 <div className="rounded-xl border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-slate-300">
                   Chế độ xem công khai chỉ cho phép đọc dữ liệu. Các thao tác
-                  thu tiền cần đăng nhập admin.
+                  cập nhật trạng thái đóng tiền cần đăng nhập admin.
                 </div>
               )}
 
-              <div className="divide-y divide-slate-700/50">
-                {financeRecords.map((userRow) => (
-                  <div
-                    key={userRow.id}
-                    className="py-3 flex items-center justify-between gap-2"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-slate-200">
-                        {userRow.name}
-                      </p>
-                      <div className="flex gap-2 mt-1">
-                        <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded-full border ${userRow.is_paid ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}
-                        >
-                          {userRow.is_paid
-                            ? '● Quỹ Tháng: OK'
-                            : '○ Quỹ Tháng: Chưa'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <p
-                        className={`text-xs font-bold ${userRow.total_debt > 0 ? 'text-rose-400' : 'text-slate-400'}`}
-                      >
-                        Nợ: {userRow.total_debt.toLocaleString()}đ
-                      </p>
-                      {userRow.total_debt > 0 && canEdit && (
-                        <button
-                          onClick={() => void handleClearDebt(userRow.id)}
-                          className="mt-1 text-[10px] bg-slate-900 hover:bg-slate-950 text-slate-300 px-2 py-0.5 rounded border border-slate-700 transition-colors"
-                        >
-                          Thu tiền
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {financeView === 'fund' ? (
+                <MonthlyFundList
+                  rows={monthlyFundRows}
+                  canEdit={canEdit}
+                  submitting={submitting}
+                  monthLabel={fundMonth}
+                  onTogglePaid={(userId, _nextPaid) => {
+                    void handleClearDebt(userId)
+                  }}
+                />
+              ) : (
+                <PenaltyList
+                  rows={penaltyRows}
+                  canEdit={canEdit}
+                  submitting={submitting}
+                  periodLabel={penaltyRangeLabel}
+                  onTogglePaid={(recordId, nextPaid) => {
+                    void handleTogglePenaltyPaid(recordId, nextPaid)
+                  }}
+                />
+              )}
             </div>
           )}
 
@@ -867,70 +1062,124 @@ export default function FootballManager() {
       >
         <div className="space-y-4">
           <div className="border-b border-slate-700/60 pb-3">
-            <h3 className="text-base font-bold text-slate-100">
-              Lọc dữ liệu điểm danh
-            </h3>
+            <h3 className="text-base font-bold text-slate-100">Lọc dữ liệu</h3>
             <p className="text-xs text-slate-400 mt-1">
-              Chọn chế độ lọc rồi chọn thời gian tương ứng.
+              {activeTab === 'daily'
+                ? 'Chọn chế độ lọc rồi chọn thời gian tương ứng.'
+                : financeView === 'fund'
+                  ? 'Phần quỹ chỉ lọc theo tháng.'
+                  : 'Phần phạt hỗ trợ lọc theo ngày, tuần, tháng.'}
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { key: 'day', label: 'Ngày' },
-              { key: 'week', label: 'Tuần' },
-              { key: 'month', label: 'Tháng' },
-            ].map((item) => (
-              <button
-                key={item.key}
-                onClick={() => setDraftFilter(item.key as TimeFilter)}
-                className={`rounded-lg border py-2 text-xs font-semibold ${
-                  draftFilter === item.key
-                    ? 'bg-emerald-500 text-white border-emerald-400'
-                    : 'bg-slate-900 text-slate-300 border-slate-700'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          {draftFilter === 'day' && (
-            <div className="space-y-1">
-              <label className="text-xs text-slate-400">Chọn ngày cụ thể</label>
-              <input
-                type="date"
-                value={draftDay}
-                onChange={(e) => setDraftDay(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-          )}
-
-          {draftFilter === 'week' && (
-            <div className="space-y-1">
-              <label className="text-xs text-slate-400">
-                Chọn tuần (ISO week)
-              </label>
-              <input
-                type="week"
-                value={draftWeek}
-                onChange={(e) => setDraftWeek(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-          )}
-
-          {draftFilter === 'month' && (
+          {activeTab === 'finance' && financeView === 'fund' ? (
             <div className="space-y-1">
               <label className="text-xs text-slate-400">Chọn tháng</label>
               <input
                 type="month"
-                value={draftMonth}
-                onChange={(e) => setDraftMonth(e.target.value)}
+                value={draftFundMonth}
+                onChange={(e) => setDraftFundMonth(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-emerald-500"
               />
             </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { key: 'day', label: 'Ngày' },
+                  { key: 'week', label: 'Tuần' },
+                  { key: 'month', label: 'Tháng' },
+                ].map((item) => {
+                  const isSelected =
+                    activeTab === 'daily'
+                      ? draftFilter === item.key
+                      : draftPenaltyFilter === item.key
+
+                  return (
+                    <button
+                      key={item.key}
+                      onClick={() => {
+                        if (activeTab === 'daily') {
+                          setDraftFilter(item.key as TimeFilter)
+                        } else {
+                          setDraftPenaltyFilter(item.key as TimeFilter)
+                        }
+                      }}
+                      className={`rounded-lg border py-2 text-xs font-semibold ${
+                        isSelected
+                          ? 'bg-emerald-500 text-white border-emerald-400'
+                          : 'bg-slate-900 text-slate-300 border-slate-700'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {(activeTab === 'daily' ? draftFilter : draftPenaltyFilter) ===
+                'day' && (
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">
+                    Chọn ngày cụ thể
+                  </label>
+                  <input
+                    type="date"
+                    value={activeTab === 'daily' ? draftDay : draftPenaltyDay}
+                    onChange={(e) => {
+                      if (activeTab === 'daily') {
+                        setDraftDay(e.target.value)
+                      } else {
+                        setDraftPenaltyDay(e.target.value)
+                      }
+                    }}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              )}
+
+              {(activeTab === 'daily' ? draftFilter : draftPenaltyFilter) ===
+                'week' && (
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">
+                    Chọn tuần (ISO week)
+                  </label>
+                  <input
+                    type="week"
+                    value={activeTab === 'daily' ? draftWeek : draftPenaltyWeek}
+                    onChange={(e) => {
+                      if (activeTab === 'daily') {
+                        setDraftWeek(e.target.value)
+                      } else {
+                        setDraftPenaltyWeek(e.target.value)
+                      }
+                    }}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              )}
+
+              {(activeTab === 'daily' ? draftFilter : draftPenaltyFilter) ===
+                'month' && (
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">Chọn tháng</label>
+                  <input
+                    type="month"
+                    value={
+                      activeTab === 'daily' ? draftMonth : draftPenaltyMonth
+                    }
+                    onChange={(e) => {
+                      if (activeTab === 'daily') {
+                        setDraftMonth(e.target.value)
+                      } else {
+                        setDraftPenaltyMonth(e.target.value)
+                      }
+                    }}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              )}
+            </>
           )}
 
           <div className="flex justify-end gap-2">
