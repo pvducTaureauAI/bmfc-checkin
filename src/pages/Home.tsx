@@ -20,7 +20,7 @@ interface FinanceRow {
 }
 
 export default function FootballManager() {
-  const {user} = useAuth();
+  const {} = useAuth();
   // --- Các State Quản Lý Giao Diện & Dữ Liệu ---
   const [activeTab, setActiveTab] = useState<"daily" | "finance" | "settings">("daily");
   const [currentMatch, setCurrentMatch] = useState<Match | null>(null);
@@ -49,7 +49,8 @@ export default function FootballManager() {
       
       if (activeTab === "daily") {
         // 1. Lấy hoặc tạo trận đấu hôm nay
-        const match = await footballService.getOrCreateTodayMatch();
+        const today = new Date().toISOString().split("T")[0];
+        const match = await footballService.getOrCreateMatch(today);
         setCurrentMatch(match);
         
         // 2. Lấy danh sách điểm danh của trận đó
@@ -132,7 +133,8 @@ export default function FootballManager() {
       // 1. Đồng bộ danh sách điểm danh hiện tại lên DB trước
       await footballService.saveAttendance(currentMatch.id, players);
       // 2. Chốt trận và quét phạt tự động
-      await footballService.confirmMatchAndCheckPenalties(currentMatch.id, status, result);
+      const today = new Date().toISOString().split("T")[0];
+      await footballService.confirmMatchAndCheckPenalties(currentMatch.id, status, result, today);
       
       alert("Đã chốt sổ thành công! Tiền phạt đã tự động ghi nhận vào tài khoản thành viên.");
       // Cập nhật lại trạng thái trận đấu cục bộ

@@ -6,28 +6,31 @@ import { supabase } from "./utils/supabase";
 
 export const footballService = {
   
-  // 1. LẤY HOẶC TẠO TRẬN ĐẤU HÔM NAY (Trả về kiểu Match)
-  getOrCreateTodayMatch: async (): Promise<Match> => {
-    const today = new Date().toISOString().split("T")[0];
-
-    let { data: match, error } = await supabase
+  // 1. LẤY HOẶC TẠO TRẬN ĐẤU CHO NGÀY ĐƯỢC CHỌN (Trả về kiểu Match)
+  getOrCreateMatch: async (date: string): Promise<Match> => {
+    // Lấy tất cả các trận đấu vào ngày được chọn, sắp xếp theo thời gian tạo giảm dần để lấy trận mới nhất
+    // Việc này tránh lỗi PostgREST "multiple (or no) rows returned" khi database bị trùng lặp dữ liệu
+    const { data: matches, error } = await supabase
       .from("bmfc_matches")
       .select("*")
-      .eq("date", today)
-      .single();
-
-    if (error && error.code === "PGRST116") {
-      const { data: newMatch, error: createError } = await supabase
-        .from("bmfc_matches")
-        .insert([{ date: today, status: MatchStatus.PENDING }])
-        .select()
-        .single();
-
-      if (createError) throw createError;
-      return newMatch as Match;
-    }
+      .eq("date", date)
+      .order("created_at", { ascending: false });
 
     if (error) throw error;
+
+    const match = matches && matches.length > 0 ? matches[0] : null;
+
+    if (!match) {
+      const { data: newMatches, error: createError } = await supabase
+        .from("bmfc_matches")
+        .insert([{ date: date, status: MatchStatus.PENDING }])
+        .select();
+
+      if (createError) throw createError;
+      if (!newMatches || newMatches.length === 0) throw new Error("Không thể tạo trận đấu cho ngày được chọn.");
+      return newMatches[0] as Match;
+    }
+
     return match as Match;
   },
 
@@ -58,17 +61,28 @@ export const footballService = {
 
   // 3. LƯU TẠM DANH SÁCH ĐIỂM DANH
   saveAttendance: async (matchId: string, attendanceList: PlayerAttendance[]): Promise<boolean> => {
-    const upsertData = attendanceList.map((item) => ({
+    // Xóa các bản ghi điểm danh cũ của trận đấu này để tránh lỗi ON CONFLICT khi thiếu UNIQUE constraint
+    const { error: deleteError } = await supabase
+      .from("bmfc_attendance")
+      .delete()
+      .eq("match_id", matchId);
+
+    if (deleteError) throw deleteError;
+
+    const insertData = attendanceList.map((item) => ({
       match_id: matchId,
       user_id: item.id,
       status: item.status, // Ép chặt theo enum AttendanceStatus
     }));
 
-    const { error } = await supabase
-      .from("bmfc_attendance")
-      .upsert(upsertData, { onConflict: "match_id, user_id" });
+    if (insertData.length > 0) {
+      const { error: insertError } = await supabase
+        .from("bmfc_attendance")
+        .insert(insertData);
 
-    if (error) throw error;
+      if (insertError) throw insertError;
+    }
+
     return true;
   },
 
@@ -76,9 +90,10 @@ export const footballService = {
   confirmMatchAndCheckPenalties: async (
     matchId: string, 
     status: MatchStatus, 
-    result: MatchResult | null
+    result: MatchResult | null,
+    matchDate: string
   ): Promise<boolean> => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = matchDate;
 
     // Cập nhật trạng thái và kết quả trận đấu
     const { error: matchError } = await supabase
@@ -136,8 +151,20 @@ export const footballService = {
         });
       }
 
+      // Đi muộn
+      if (player.status === AttendanceStatus.LATE) {
+        penaltyRecords.push({
+          user_id: player.user_id,
+          type: "penalty",
+          reason: `Đi muộn ngày ${today}`,
+          amount: config.penalty_late || 20000,
+          date: today,
+          is_paid: false,
+        });
+      }
+
       // XỬ LÝ TRẬN ĐẤU: THUA HOẶC HÒA (Phạt như nhau)
-      if (player.status === AttendanceStatus.PRESENT) {
+      if (player.status === AttendanceStatus.PRESENT || player.status === AttendanceStatus.LATE) {
         if (result === MatchResult.LOSS) {
           penaltyRecords.push({
             user_id: player.user_id,
