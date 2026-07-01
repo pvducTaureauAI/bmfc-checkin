@@ -228,12 +228,12 @@ export default function FootballManager() {
   const [loading, setLoading] = useState<boolean>(true)
   const [submitting, setSubmitting] = useState<boolean>(false)
   const [penaltySettings, setPenaltySettings] = useState<PenaltySettings>({
-    penalty_forgot: 20000,
+    penalty_forgot: 30000,
     penalty_late: 20000,
-    penalty_no_show: 50000,
+    penalty_no_show: 30000,
     penalty_missed_week: 30000,
-    penalty_loss: 20000,
-    monthly_fee: 100000,
+    penalty_loss: 10000,
+    monthly_fee: 120000,
   })
   const [searchByPlayerName, setSearchByPlayerName] = useState<string>('')
 
@@ -306,6 +306,12 @@ export default function FootballManager() {
       }
 
       if (activeTab === 'finance') {
+        const latestSettings = await footballService.getPenaltySettings()
+        setPenaltySettings((prev) => ({ ...prev, ...latestSettings }))
+        const monthlyFee = Number(
+          latestSettings.monthly_fee || penaltySettings.monthly_fee || 100000,
+        )
+
         if (financeView === 'fund') {
           const monthAnchor = `${fundMonth}-01`
           const { startDate: monthStart, endDate: monthEnd } = getRangeBounds(
@@ -338,11 +344,7 @@ export default function FootballManager() {
                 user_id: userRow.id,
                 name: userRow.name,
                 is_paid: Boolean(monthlyRecord?.is_paid),
-                amount: Number(
-                  monthlyRecord?.amount ||
-                    penaltySettings.monthly_fee ||
-                    100000,
-                ),
+                amount: Number(monthlyRecord?.amount || monthlyFee),
               }
             })
             .sort((a, b) => a.name.localeCompare(b.name))
@@ -553,6 +555,12 @@ export default function FootballManager() {
 
     try {
       setSubmitting(true)
+      const latestSettings = await footballService.getPenaltySettings()
+      setPenaltySettings((prev) => ({ ...prev, ...latestSettings }))
+      const monthlyFee = Number(
+        latestSettings.monthly_fee || penaltySettings.monthly_fee || 100000,
+      )
+
       const monthAnchor = `${fundMonth}-01`
       const { startDate: monthStart, endDate: monthEnd } = getRangeBounds(
         'month',
@@ -583,7 +591,7 @@ export default function FootballManager() {
           user_id: userId,
           type: 'monthly',
           reason: `Quỹ tháng ${fundMonth}`,
-          amount: penaltySettings.monthly_fee || 100000,
+          amount: monthlyFee,
           date: monthStart,
           is_paid: true,
         })
