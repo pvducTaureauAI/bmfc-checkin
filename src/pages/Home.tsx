@@ -185,6 +185,48 @@ const summarizeAttendanceByDate = (
     .sort((a, b) => b.date.localeCompare(a.date))
 }
 
+const summarizePlayersForDate = (
+  date: string,
+  players: PlayerAttendance[],
+): DateSummary => {
+  const result =
+    players.find((player) => player.match_result)?.match_result ||
+    MatchResult.UNKNOWN
+
+  return {
+    date,
+    total: players.length,
+    present: players.filter((player) => player.status === AttendanceStatus.PRESENT)
+      .length,
+    late: players.filter((player) => player.status === AttendanceStatus.LATE)
+      .length,
+    forgot: players.filter((player) => player.status === AttendanceStatus.FORGOT)
+      .length,
+    noShow: players.filter((player) => player.status === AttendanceStatus.NO_SHOW)
+      .length,
+    result,
+  }
+}
+
+const upsertAttendanceSummary = (
+  summaries: DateSummary[],
+  date: string,
+  players: PlayerAttendance[],
+) => {
+  const nextSummary = summarizePlayersForDate(date, players)
+  const index = summaries.findIndex((summary) => summary.date === date)
+
+  if (index === -1) {
+    return [...summaries, nextSummary].sort((a, b) =>
+      b.date.localeCompare(a.date),
+    )
+  }
+
+  const next = [...summaries]
+  next[index] = nextSummary
+  return next
+}
+
 export default function FootballManager() {
   const { user, logout, loading: authLoading } = useAuth()
   const navigate = useNavigate()
@@ -482,18 +524,22 @@ export default function FootballManager() {
     if (!canEdit) return
 
     const previousPlayers = players
+    const previousSummaries = attendanceSummaries
     const nextPlayers = players.map((player) =>
       player.id === playerId ? { ...player, status: newStatus } : player,
     )
 
     setPlayers(nextPlayers)
+    setAttendanceSummaries((prev) =>
+      upsertAttendanceSummary(prev, selectedDate, nextPlayers),
+    )
 
     try {
       setSubmitting(true)
       await footballService.saveAttendance(selectedDate, nextPlayers)
-      await fetchInitialData()
     } catch (error: any) {
       setPlayers(previousPlayers)
+      setAttendanceSummaries(previousSummaries)
       alert('Lỗi lưu điểm danh tự động: ' + error.message)
     } finally {
       setSubmitting(false)
@@ -507,6 +553,7 @@ export default function FootballManager() {
     if (!canEdit) return
 
     const previousPlayers = players
+    const previousSummaries = attendanceSummaries
     const nextPlayers = players.map((player) =>
       player.id === playerId ? { ...player, match_result: result } : player,
     )
@@ -514,10 +561,13 @@ export default function FootballManager() {
     try {
       setSubmitting(true)
       setPlayers(nextPlayers)
+      setAttendanceSummaries((prev) =>
+        upsertAttendanceSummary(prev, selectedDate, nextPlayers),
+      )
       await footballService.saveAttendance(selectedDate, nextPlayers)
-      await fetchInitialData()
     } catch (error: any) {
       setPlayers(previousPlayers)
+      setAttendanceSummaries(previousSummaries)
       alert('Lỗi cập nhật kết quả của user: ' + error.message)
     } finally {
       setSubmitting(false)
